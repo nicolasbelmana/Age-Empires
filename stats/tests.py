@@ -1,7 +1,10 @@
+from io import StringIO
+from unittest.mock import patch
+
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 
-from .management.commands.fetch_aoe_data import Command
+from .management.commands.fetch_aoe_data import AoE4WorldClient, Command
 
 from .models import Match, MatchParticipant, Player
 from .views import build_statistics
@@ -126,3 +129,42 @@ class AoE4SyncTests(TestCase):
             "la partida 9002 no contiene equipos válidos",
         ):
             command.save_game({"game_id": 9002, "state": "pending"})
+
+    @patch.object(Command, "fetch_game_pages")
+    @patch.object(Command, "save_profile")
+    @patch.object(AoE4WorldClient, "get_json")
+    def test_handle_saves_games_inside_each_page(
+        self,
+        get_json,
+        save_profile,
+        fetch_game_pages,
+    ):
+        get_json.return_value = {
+            "profile_id": 21,
+            "name": "Alpha",
+            "modes": {},
+        }
+        game = {
+            "game_id": 9003,
+            "teams": [
+                [
+                    {
+                        "player": {
+                            "profile_id": 21,
+                            "name": "Alpha",
+                            "result": "win",
+                            "civilization": "english",
+                        }
+                    }
+                ]
+            ],
+        }
+        fetch_game_pages.return_value = [[game]]
+        command = Command(stdout=StringIO(), stderr=StringIO())
+
+        command.handle(profile_ids="21", leaderboard="", max_pages=1)
+
+        self.assertTrue(Match.objects.filter(match_id=9003).exists())
+        self.assertEqual(MatchParticipant.objects.count(), 1)
+        self.assertIn("1 partidas guardadas", command.stdout.getvalue())
+        self.assertEqual(command.stderr.getvalue(), "")

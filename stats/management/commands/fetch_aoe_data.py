@@ -78,21 +78,22 @@ class Command(BaseCommand):
                 options["leaderboard"],
                 options["max_pages"],
             )
-            for game in pages:
-                try:
-                    match_id = self.save_game(game)
-                except CommandError as exc:
-                    skipped_matches += 1
-                    game_id = (
-                        game.get("game_id", "sin ID")
-                        if isinstance(game, dict)
-                        else "con formato inválido"
-                    )
-                    self.stderr.write(
-                        self.style.WARNING(f"Partida {game_id} omitida: {exc}")
-                    )
-                    continue
-                saved_matches.add(match_id)
+            for page_games in pages:
+                for game in page_games:
+                    try:
+                        match_id = self.save_game(game)
+                    except CommandError as exc:
+                        skipped_matches += 1
+                        game_id = (
+                            game.get("game_id", "sin ID")
+                            if isinstance(game, dict)
+                            else "con formato inválido"
+                        )
+                        self.stderr.write(
+                            self.style.WARNING(f"Partida {game_id} omitida: {exc}")
+                        )
+                        continue
+                    saved_matches.add(match_id)
             self.stdout.write(
                 f"Perfil {profile_id}: leídas {sum(len(page) for page in pages)} partidas."
             )
