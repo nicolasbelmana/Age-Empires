@@ -32,9 +32,18 @@ h1 { margin-bottom: 8px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -.04
 .muted { color: #788797; }
 .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .panel { min-width: 0; padding: 22px; }
+.leaderboard-panel { margin-bottom: 18px; }
 .panel-heading { display: flex; justify-content: space-between; margin-bottom: 16px; }
 .panel-heading h2 { margin-bottom: 5px; font-size: 18px; }
 .panel-heading p { margin-bottom: 0; font-size: 12px; }
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; text-align: left; white-space: nowrap; }
+th { padding: 11px 12px; color: #9aa8b8; font-size: 11px; font-weight: 600; }
+td { padding: 13px 12px; border-top: 1px solid #293747; font-size: 13px; }
+td a { color: #dbe9f5; text-decoration: none; }
+td a:hover { color: #e2a34a; }
+.rank-cell { color: #e2a34a; font-weight: 800; }
+.live-badge { margin-left: 8px; border-radius: 999px; padding: 4px 7px; background: #57303a; color: #ff9ba8; font-size: 10px; }
 .chart-wrap { position: relative; height: 310px; }
 .empty-state { padding: 85px 10px; margin: 0; color: #9aa8b8; text-align: center; }
 footer { padding: 22px 2px 0; font-size: 12px; }

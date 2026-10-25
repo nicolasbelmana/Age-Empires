@@ -20,6 +20,7 @@ Panel web para explorar estadísticas de Age of Empires IV. Sincroniza perfiles 
 ## ✨ Características
 
 - Resumen del total de jugadores, partidas y jugador con mayor rating disponible.
+- Top 10 actual de la clasificación, con puesto, rating, winrate, racha y última partida.
 - Gráfico de popularidad (pick rate) por civilización.
 - Gráfico de winrate por civilización, con un umbral mínimo de partidas.
 - Sincronización idempotente de perfiles, partidas y participantes desde AoE4 World.
@@ -55,6 +56,8 @@ DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.33
 DB_PASSWORD=una-clave-para-la-base-de-datos
 MYSQL_ROOT_PASSWORD=otra-clave-para-mysql
 AOE4_PROFILE_IDS=1001
+AOE4_LEADERBOARD=rm_solo
+AOE4_LEADERBOARD_SIZE=10
 ```
 
 No publiques el archivo `.env`; está excluido de Git.
@@ -91,6 +94,12 @@ Configura `AOE4_PROFILE_IDS` en `.env` con uno o varios IDs numéricos separados
 docker compose exec web python manage.py fetch_aoe_data
 ```
 
+El mismo comando actualiza también el top de la clasificación configurada en `AOE4_LEADERBOARD` (por defecto `rm_solo`). Guarda 10 jugadores por defecto; puedes cambiar el límite con `AOE4_LEADERBOARD_SIZE` (máximo 50). Para actualizar solo la clasificación sin sincronizar perfiles o partidas:
+
+```bash
+docker compose exec web python manage.py fetch_aoe_data --profile-ids ""
+```
+
 También puedes pasar los IDs directamente:
 
 ```bash
@@ -116,6 +125,8 @@ docker compose exec web python manage.py fetch_aoe_data
 ### Métricas
 
 - El rating del jugador destacado usa el modo configurado por `AOE4_RATING_MODE` (por defecto `rm_solo`).
+- El top de la clasificación viene del leaderboard actual de AoE4 World y se actualiza al ejecutar el sincronizador. Es una clasificación de temporada, no una lista de jugadores conectados en vivo.
+- La marca «En vivo» indica que AoE4 World reportó el canal de Twitch del jugador como activo durante la última sincronización.
 - El pick rate se calcula con las participaciones de civilizaciones almacenadas.
 - El winrate se muestra cuando una civilización alcanza `MIN_CIV_GAMES` partidas (por defecto, 5).
 - El endpoint JSON está disponible en `/api/stats/`.

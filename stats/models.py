@@ -55,3 +55,40 @@ class MatchParticipant(models.Model):
 
     def __str__(self):
         return f"{self.player} - {self.match}"
+
+
+class LeaderboardEntry(models.Model):
+    leaderboard = models.CharField(max_length=40)
+    season = models.PositiveSmallIntegerField()
+    rank = models.PositiveIntegerField()
+    profile_id = models.BigIntegerField()
+    name = models.CharField(max_length=150)
+    country = models.CharField(max_length=2, blank=True)
+    rating = models.PositiveIntegerField(null=True, blank=True)
+    games_count = models.PositiveIntegerField(default=0)
+    wins_count = models.PositiveIntegerField(default=0)
+    losses_count = models.PositiveIntegerField(default=0)
+    win_rate = models.FloatField(null=True, blank=True)
+    streak = models.IntegerField(default=0)
+    last_game_at = models.DateTimeField(null=True, blank=True)
+    twitch_is_live = models.BooleanField(default=False)
+    synced_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["rank"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("leaderboard", "season", "rank"),
+                name="unique_leaderboard_season_rank",
+            ),
+            models.UniqueConstraint(
+                fields=("leaderboard", "season", "profile_id"),
+                name="unique_leaderboard_season_player",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("leaderboard", "season", "rank")),
+        ]
+
+    def __str__(self):
+        return f"#{self.rank} {self.name} ({self.leaderboard})"

@@ -8,7 +8,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from stats.models import Match, MatchParticipant, Player
+from stats.models import LeaderboardEntry, Match, MatchParticipant, Player
 
 
 class AoE4WorldClient:
@@ -59,16 +59,16 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         profile_ids = self.parse_profile_ids(options["profile_ids"])
-        if not profile_ids:
-            raise CommandError(
-                "Indica --profile-ids o configura AOE4_PROFILE_IDS con IDs de perfil."
-            )
         if options["max_pages"] < 0:
             raise CommandError("--max-pages debe ser 0 o un número positivo.")
 
         client = AoE4WorldClient(settings.AOE4_API_BASE_URL)
         saved_matches = set()
         skipped_matches = 0
+        if not profile_ids:
+            self.stdout.write(
+                "No se indicaron perfiles; se actualizará solo la clasificación."
+            )
         for profile_id in profile_ids:
             profile = client.get_json(f"players/{profile_id}")
             self.save_profile(profile, profile_id)
@@ -98,13 +98,104 @@ class Command(BaseCommand):
                 f"Perfil {profile_id}: leídas {sum(len(page) for page in pages)} partidas."
             )
 
+        leaderboard = client.get_json(
+            f"leaderboards/{settings.AOE4_LEADERBOARD}",
+            params={"page": 1},
+        )
+        saved_leaders = self.save_leaderboard(leaderboard)
+        self.stdout.write(
+            f"Clasificación {settings.AOE4_LEADERBOARD}: "
+            f"actualizados {saved_leaders} jugadores de la temporada "
+            f"{leaderboard['season']}."
+        )
         self.stdout.write(
             self.style.SUCCESS(
                 f"Sincronización finalizada: {len(profile_ids)} perfiles y "
                 f"{len(saved_matches)} partidas guardadas; "
-                f"{skipped_matches} partidas omitidas por datos inválidos."
+                f"{skipped_matches} partidas omitidas por datos inválidos; "
+                f"{saved_leaders} jugadores en la clasificación actual."
             )
         )
+
+    @classmethod
+    def save_leaderboard(cls, data):
+        if not isinstance(data, dict):
+            raise CommandError("AoE4 World devolvió una clasificación inválida.")
+        try:
+            season = int(data["season"])
+            players = data["players"]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise CommandError(
+                "La respuesta de la clasificación no incluye temporada o jugadores."
+            ) from exc
+        leaderboard = str(data.get("key") or settings.AOE4_LEADERBOARD)[:40]
+        if season <= 0 or not isinstance(players, list) or not players:
+            raise CommandError("La respuesta de la clasificación no contiene datos válidos.")
+
+        entries = []
+        for item in players[: settings.AOE4_LEADERBOARD_SIZE]:
+            if not isinstance(item, dict):
+                raise CommandError("La clasificación contiene un jugador inválido.")
+            try:
+                profile_id = int(item["profile_id"])
+                rank = int(item.get("rank") or item["visible_rank"])
+                name = str(item["name"]).strip()
+            except (KeyError, TypeError, ValueError) as exc:
+                raise CommandError(
+                    "La clasificación contiene un jugador sin ID, posición o nombre válido."
+                ) from exc
+            if profile_id <= 0 or rank <= 0 or not name:
+                raise CommandError("La clasificación contiene un jugador inválido.")
+
+            entries.append(
+                LeaderboardEntry(
+                    leaderboard=leaderboard,
+                    season=season,
+                    rank=rank,
+                    profile_id=profile_id,
+                    name=name[:150],
+                    country=str(item.get("country") or "")[:2],
+                    rating=cls.nonnegative_integer(item.get("rating")),
+                    games_count=cls.nonnegative_integer(item.get("games_count")) or 0,
+                    wins_count=cls.nonnegative_integer(item.get("wins_count")) or 0,
+                    losses_count=cls.nonnegative_integer(item.get("losses_count")) or 0,
+                    win_rate=cls.percentage(item.get("win_rate")),
+                    streak=cls.signed_integer(item.get("streak")) or 0,
+                    last_game_at=cls.parse_datetime(item.get("last_game_at")),
+                    twitch_is_live=item.get("twitch_is_live") is True,
+                )
+            )
+
+        with transaction.atomic():
+            LeaderboardEntry.objects.filter(
+                leaderboard=leaderboard,
+                season=season,
+            ).delete()
+            LeaderboardEntry.objects.bulk_create(entries)
+        return len(entries)
+
+    @staticmethod
+    def nonnegative_integer(value):
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return None
+        return number if number >= 0 else None
+
+    @staticmethod
+    def signed_integer(value):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def percentage(value):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return number if 0 <= number <= 100 else None
 
     @staticmethod
     def parse_profile_ids(raw_ids):

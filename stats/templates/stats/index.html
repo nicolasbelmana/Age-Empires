@@ -23,14 +23,14 @@
 
     <section class="cards" aria-label="Resumen">
       <article class="card">
-        <span class="card-label">Jugadores registrados</span>
+        <span class="card-label">Jugadores en partidas sincronizadas</span>
         <strong class="card-value">{{ stats.players_count }}</strong>
       </article>
       <article class="card">
-        <span class="card-label">Mejor jugador · ELO actual</span>
+        <span class="card-label">Líder actual · {{ stats.leaderboard_key }}</span>
         {% if stats.best_player %}
           <strong class="card-value card-value-small">{{ stats.best_player.name }}</strong>
-          <span class="card-detail">{{ stats.best_player.rating }} ELO</span>
+          <span class="card-detail">{% if stats.best_player.rank %}#{{ stats.best_player.rank }} · {% endif %}{{ stats.best_player.rating }} ELO</span>
         {% else %}
           <strong class="card-value card-value-small muted">Sin datos</strong>
         {% endif %}
@@ -39,6 +39,60 @@
         <span class="card-label">Partidas analizadas</span>
         <strong class="card-value">{{ stats.total_games }}</strong>
       </article>
+    </section>
+
+    <section class="panel leaderboard-panel" aria-label="Clasificación actual">
+      <div class="panel-heading">
+        <div>
+          <h2>Top {{ stats.leaderboard_players|length }} · {{ stats.leaderboard_key }}</h2>
+          <p>
+            Clasificación de la temporada {{ stats.leaderboard_season|default:"sin sincronizar" }}.
+            No representa quién está conectado ahora.
+          </p>
+        </div>
+        {% if stats.leaderboard_players %}
+          <span class="badge">Actualizado {{ stats.leaderboard_players.0.synced_at|date:"d/m/Y H:i" }}</span>
+        {% endif %}
+      </div>
+      {% if stats.leaderboard_players %}
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Puesto</th>
+                <th scope="col">Jugador</th>
+                <th scope="col">Rating</th>
+                <th scope="col">Winrate</th>
+                <th scope="col">Partidas</th>
+                <th scope="col">Victorias / derrotas</th>
+                <th scope="col">Racha</th>
+                <th scope="col">Última partida</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for player in stats.leaderboard_players %}
+                <tr>
+                  <td class="rank-cell">#{{ player.rank }}</td>
+                  <td>
+                    <a href="https://aoe4world.com/players/{{ player.profile_id }}" target="_blank" rel="noopener noreferrer">
+                      {{ player.name }}
+                    </a>
+                    {% if player.twitch_is_live %}<span class="live-badge">En vivo</span>{% endif %}
+                  </td>
+                  <td>{{ player.rating|default:"—" }}</td>
+                  <td>{{ player.win_rate_display }}</td>
+                  <td>{{ player.games_count }}</td>
+                  <td>{{ player.wins_count }} / {{ player.losses_count }}</td>
+                  <td>{{ player.streak_display }}</td>
+                  <td>{{ player.last_game_at|date:"d/m/Y H:i"|default:"—" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="empty-state">Todavía no hay una clasificación sincronizada. Ejecuta el comando de sincronización para cargarla.</p>
+      {% endif %}
     </section>
 
     <section class="charts" aria-label="Estadísticas por civilización">

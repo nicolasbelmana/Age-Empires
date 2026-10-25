@@ -102,4 +102,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AOE4_API_BASE_URL = os.getenv("AOE4_API_BASE_URL", "https://aoe4world.com/api/v0").rstrip("/")
 AOE4_RATING_MODE = os.getenv("AOE4_RATING_MODE", "rm_solo")
+AOE4_LEADERBOARD = os.getenv("AOE4_LEADERBOARD", "rm_solo")
+AOE4_LEADERBOARD_SIZE = min(50, max(1, int(os.getenv("AOE4_LEADERBOARD_SIZE", "10"))))
 MIN_CIV_GAMES = max(1, int(os.getenv("MIN_CIV_GAMES", "5")))
