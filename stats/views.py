@@ -1,9 +1,23 @@
-from django.conf import settings
-from django.db.models import Count, Q
-from django.http import JsonResponse
-from django.shortcuts import render
+from datetime import timedelta
+from io import StringIO
 
-from .models import LeaderboardEntry, Match, MatchParticipant, Player
+from django.conf import settings
+from django.contrib import messages
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.db.models import Count, Q
+from django.db import transaction
+from django.http import JsonResponse
+from django.shortcuts import redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+
+from .models import DataSyncStatus, LeaderboardEntry, Match, MatchParticipant, Player
+
+
+SYNC_STATUS_ID = 1
+SYNC_COOLDOWN = timedelta(minutes=1)
+SYNC_STALE_AFTER = timedelta(minutes=10)
 
 
 def build_statistics():
@@ -104,8 +118,79 @@ def build_statistics():
 
 
 def dashboard(request):
-    return render(request, "stats/index.html", {"stats": build_statistics()})
+    data_sync = DataSyncStatus.objects.filter(pk=SYNC_STATUS_ID).first()
+    sync_running = (
+        data_sync is not None
+        and data_sync.status == DataSyncStatus.Status.RUNNING
+        and data_sync.started_at is not None
+        and data_sync.started_at > timezone.now() - SYNC_STALE_AFTER
+    )
+    return render(
+        request,
+        "stats/index.html",
+        {
+            "stats": build_statistics(),
+            "data_sync": data_sync,
+            "sync_running": sync_running,
+        },
+    )
 
 
 def stats_json(request):
     return JsonResponse(build_statistics())
+
+
+@require_POST
+def sync_data(request):
+    now = timezone.now()
+    with transaction.atomic():
+        status = DataSyncStatus.objects.get(pk=SYNC_STATUS_ID)
+        available = DataSyncStatus.objects.filter(pk=SYNC_STATUS_ID).filter(
+            Q(status__in=[
+                DataSyncStatus.Status.IDLE,
+                DataSyncStatus.Status.SUCCEEDED,
+                DataSyncStatus.Status.FAILED,
+            ])
+            | Q(
+                status=DataSyncStatus.Status.RUNNING,
+                started_at__lte=now - SYNC_STALE_AFTER,
+            )
+        )
+        if status.started_at is not None:
+            available = available.filter(started_at__lte=now - SYNC_COOLDOWN)
+        claimed = available.update(
+            status=DataSyncStatus.Status.RUNNING,
+            started_at=now,
+            finished_at=None,
+            error="",
+        )
+
+    if not claimed:
+        if status.status == DataSyncStatus.Status.RUNNING:
+            messages.info(request, "La actualización ya está en curso.")
+        else:
+            messages.info(
+                request,
+                "Espera un minuto desde la última actualización para volver a sincronizar.",
+            )
+        return redirect("dashboard")
+
+    output = StringIO()
+    errors = StringIO()
+    try:
+        call_command("fetch_aoe_data", stdout=output, stderr=errors)
+    except CommandError as exc:
+        DataSyncStatus.objects.filter(pk=SYNC_STATUS_ID).update(
+            status=DataSyncStatus.Status.FAILED,
+            finished_at=timezone.now(),
+            error=str(exc),
+        )
+        messages.error(request, f"No se pudieron actualizar los datos: {exc}")
+    else:
+        DataSyncStatus.objects.filter(pk=SYNC_STATUS_ID).update(
+            status=DataSyncStatus.Status.SUCCEEDED,
+            finished_at=timezone.now(),
+            error="",
+        )
+        messages.success(request, "Los datos se actualizaron correctamente.")
+    return redirect("dashboard")

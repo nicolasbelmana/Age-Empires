@@ -92,3 +92,27 @@ class LeaderboardEntry(models.Model):
 
     def __str__(self):
         return f"#{self.rank} {self.name} ({self.leaderboard})"
+
+
+class DataSyncStatus(models.Model):
+    class Status(models.TextChoices):
+        IDLE = "idle", "Sin iniciar"
+        RUNNING = "running", "En curso"
+        SUCCEEDED = "succeeded", "Completada"
+        FAILED = "failed", "Fallida"
+
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.IDLE,
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "estado de sincronización"
+        verbose_name_plural = "estado de sincronización"
+
+    def __str__(self):
+        return f"Sincronización {self.get_status_display()}"

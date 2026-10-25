@@ -122,6 +122,8 @@ docker compose up -d --build --force-recreate web
 docker compose exec web python manage.py fetch_aoe_data
 ```
 
+También puedes actualizar los datos desde el botón **Actualizar datos** del panel. La solicitud sincroniza los IDs configurados en `AOE4_PROFILE_IDS`, las partidas recientes y el leaderboard. Para evitar llamadas repetidas a la API, solo se permite iniciar una actualización cada minuto.
+
 ### Métricas
 
 - El rating del jugador destacado usa el modo configurado por `AOE4_RATING_MODE` (por defecto `rm_solo`).

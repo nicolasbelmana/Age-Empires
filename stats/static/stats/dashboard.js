@@ -1,4 +1,11 @@
 document.addEventListener("DOMContentLoaded", () => {
+  const syncForm = document.getElementById("sync-form");
+  syncForm.addEventListener("submit", () => {
+    const button = syncForm.querySelector("button");
+    button.disabled = true;
+    button.textContent = "Actualizando...";
+  });
+
   const stats = JSON.parse(document.getElementById("stats-data").textContent);
   const colors = [
     "#e2a34a", "#62a7dc", "#d96c55", "#70b88a", "#ad86d6",

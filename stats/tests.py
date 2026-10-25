@@ -2,14 +2,23 @@ from io import StringIO
 from unittest.mock import patch
 
 from django.core.management.base import CommandError
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
+from django.utils import timezone
 
 from .management.commands.fetch_aoe_data import AoE4WorldClient, Command
 
-from .models import LeaderboardEntry, Match, MatchParticipant, Player
+from .models import DataSyncStatus, LeaderboardEntry, Match, MatchParticipant, Player
 from .views import build_statistics
 
 
+@override_settings(
+    STORAGES={
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+)
 class DashboardStatisticsTests(TestCase):
     def setUp(self):
         Player.objects.create(profile_id=1, name="Alpha", rating=1500)
@@ -46,14 +55,6 @@ class DashboardStatisticsTests(TestCase):
 
         self.assertEqual(stats["winrates"], [])
 
-    @override_settings(
-        STORAGES={
-            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-            "staticfiles": {
-                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-            },
-        }
-    )
     def test_current_leaderboard_is_used_for_best_player(self):
         LeaderboardEntry.objects.create(
             leaderboard="rm_solo",
@@ -76,14 +77,6 @@ class DashboardStatisticsTests(TestCase):
             2492,
         )
 
-    @override_settings(
-        STORAGES={
-            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-            "staticfiles": {
-                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-            },
-        }
-    )
     def test_dashboard_and_json_endpoint_return_statistics(self):
         dashboard = self.client.get("/")
         api_response = self.client.get("/api/stats/")
@@ -91,6 +84,53 @@ class DashboardStatisticsTests(TestCase):
         self.assertEqual(dashboard.status_code, 200)
         self.assertEqual(api_response.status_code, 200)
         self.assertEqual(api_response.json()["players_count"], 2)
+
+    @patch("stats.views.call_command")
+    def test_sync_button_runs_command_and_records_success(self, call_command):
+        response = self.client.post("/sync/")
+
+        self.assertRedirects(response, "/")
+        call_command.assert_called_once()
+        status = DataSyncStatus.objects.get(pk=1)
+        self.assertEqual(status.status, DataSyncStatus.Status.SUCCEEDED)
+        self.assertIsNotNone(status.finished_at)
+
+    @patch("stats.views.call_command")
+    def test_sync_button_reports_command_errors(self, call_command):
+        call_command.side_effect = CommandError("API no disponible")
+
+        response = self.client.post("/sync/", follow=True)
+
+        self.assertEqual(response.redirect_chain, [("/", 302)])
+        status = DataSyncStatus.objects.get(pk=1)
+        self.assertEqual(status.status, DataSyncStatus.Status.FAILED)
+        self.assertEqual(status.error, "API no disponible")
+        self.assertContains(response, "No se pudieron actualizar los datos: API no disponible")
+
+    def test_sync_endpoint_rejects_get_requests(self):
+        response = self.client.get("/sync/")
+
+        self.assertEqual(response.status_code, 405)
+
+    @patch("stats.views.call_command")
+    def test_sync_button_enforces_one_minute_cooldown(self, call_command):
+        DataSyncStatus.objects.filter(pk=1).update(
+            status=DataSyncStatus.Status.SUCCEEDED,
+            started_at=timezone.now(),
+        )
+
+        response = self.client.post("/sync/", follow=True)
+
+        self.assertEqual(response.redirect_chain, [("/", 302)])
+        call_command.assert_not_called()
+        self.assertContains(response, "Espera un minuto")
+
+    def test_sync_button_requires_csrf_token(self):
+        client = Client(enforce_csrf_checks=True)
+
+        response = client.post("/sync/")
+
+        self.assertEqual(response.status_code, 403)
 
 
 class AoE4SyncTests(TestCase):

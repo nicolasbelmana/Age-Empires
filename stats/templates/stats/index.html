@@ -18,8 +18,31 @@
         <h1>Estadísticas de jugadores</h1>
         <p class="subtitle">Un resumen de perfiles y civilizaciones de las partidas sincronizadas.</p>
       </div>
-      <span class="badge">Datos de AoE4 World</span>
+      <div class="header-actions">
+        <span class="badge">Datos de AoE4 World</span>
+        <form method="post" action="{% url 'sync_data' %}" id="sync-form">
+          {% csrf_token %}
+          <button class="sync-button" type="submit" {% if sync_running %}disabled{% endif %}>
+            {% if sync_running %}Actualizando...{% else %}Actualizar datos{% endif %}
+          </button>
+        </form>
+      </div>
     </header>
+
+    {% if messages %}
+      <div class="messages" role="status" aria-live="polite">
+        {% for message in messages %}
+          <p class="message message-{{ message.tags }}">{{ message }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if data_sync.finished_at %}
+      <p class="sync-timestamp">
+        Última actualización: {{ data_sync.finished_at|date:"d/m/Y H:i" }}
+        {% if data_sync.status == "failed" %}· {{ data_sync.error }}{% endif %}
+      </p>
+    {% endif %}
 
     <section class="cards" aria-label="Resumen">
       <article class="card">
