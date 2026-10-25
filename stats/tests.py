@@ -1,3 +1,4 @@
+from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 
 from .management.commands.fetch_aoe_data import Command
@@ -42,6 +43,14 @@ class DashboardStatisticsTests(TestCase):
 
         self.assertEqual(stats["winrates"], [])
 
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+            },
+        }
+    )
     def test_dashboard_and_json_endpoint_return_statistics(self):
         dashboard = self.client.get("/")
         api_response = self.client.get("/api/stats/")
@@ -108,3 +117,12 @@ class AoE4SyncTests(TestCase):
             MatchParticipant.objects.get(player_id=11).civilization,
             "english",
         )
+
+    def test_save_game_reports_when_api_omits_teams(self):
+        command = Command()
+
+        with self.assertRaisesMessage(
+            CommandError,
+            "la partida 9002 no contiene equipos válidos",
+        ):
+            command.save_game({"game_id": 9002, "state": "pending"})

@@ -68,6 +68,7 @@ class Command(BaseCommand):
 
         client = AoE4WorldClient(settings.AOE4_API_BASE_URL)
         saved_matches = set()
+        skipped_matches = 0
         for profile_id in profile_ids:
             profile = client.get_json(f"players/{profile_id}")
             self.save_profile(profile, profile_id)
@@ -78,16 +79,29 @@ class Command(BaseCommand):
                 options["max_pages"],
             )
             for game in pages:
-                self.save_game(game)
-                saved_matches.add(game["game_id"])
+                try:
+                    match_id = self.save_game(game)
+                except CommandError as exc:
+                    skipped_matches += 1
+                    game_id = (
+                        game.get("game_id", "sin ID")
+                        if isinstance(game, dict)
+                        else "con formato inválido"
+                    )
+                    self.stderr.write(
+                        self.style.WARNING(f"Partida {game_id} omitida: {exc}")
+                    )
+                    continue
+                saved_matches.add(match_id)
             self.stdout.write(
-                f"Perfil {profile_id}: procesadas {sum(len(page) for page in pages)} partidas."
+                f"Perfil {profile_id}: leídas {sum(len(page) for page in pages)} partidas."
             )
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"Sincronización finalizada: {len(profile_ids)} perfiles y "
-                f"{len(saved_matches)} partidas."
+                f"{len(saved_matches)} partidas guardadas; "
+                f"{skipped_matches} partidas omitidas por datos inválidos."
             )
         )
 
@@ -184,21 +198,36 @@ class Command(BaseCommand):
         return parsed
 
     def save_game(self, game):
+        if not isinstance(game, dict):
+            raise CommandError("el registro de partida no es un objeto JSON.")
         try:
             game_id = int(game["game_id"])
-            teams = game["teams"]
-            if not isinstance(teams, list):
-                raise TypeError
-            participants = [
-                participant["player"]
-                for team in teams
-                if isinstance(team, list)
-                for participant in team
-                if isinstance(participant, dict)
-                and isinstance(participant.get("player"), dict)
-            ]
         except (KeyError, TypeError, ValueError) as exc:
-            raise CommandError("AoE4 World devolvió una partida con formato inválido.") from exc
+            raise CommandError("falta el ID de partida válido (`game_id`).") from exc
+        if game_id <= 0:
+            raise CommandError("el ID de partida (`game_id`) debe ser positivo.")
+
+        teams = game.get("teams")
+        if not isinstance(teams, list):
+            state = game.get("state", "desconocido")
+            raise CommandError(
+                f"la partida {game_id} no contiene equipos válidos "
+                f"(estado de AoE4 World: {state})."
+            )
+        participants = [
+            participant["player"]
+            for team in teams
+            if isinstance(team, list)
+            for participant in team
+            if isinstance(participant, dict)
+            and isinstance(participant.get("player"), dict)
+        ]
+        if not participants:
+            state = game.get("state", "desconocido")
+            raise CommandError(
+                f"la partida {game_id} no contiene participantes válidos "
+                f"(estado de AoE4 World: {state})."
+            )
 
         with transaction.atomic():
             try:
@@ -249,3 +278,4 @@ class Command(BaseCommand):
                         "rating": rating,
                     },
                 )
+        return game_id
