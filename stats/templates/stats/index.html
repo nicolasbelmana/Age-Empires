@@ -1,0 +1,70 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121820">
+  <title>AoE4 Stats</title>
+  <link rel="stylesheet" href="{% static 'stats/styles.css' %}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js" defer></script>
+  <script src="{% static 'stats/dashboard.js' %}" defer></script>
+</head>
+<body>
+  <main class="page">
+    <header class="header">
+      <div>
+        <p class="eyebrow">AGE OF EMPIRES IV</p>
+        <h1>Estadísticas de jugadores</h1>
+        <p class="subtitle">Un resumen de perfiles y civilizaciones de las partidas sincronizadas.</p>
+      </div>
+      <span class="badge">Datos de AoE4 World</span>
+    </header>
+
+    <section class="cards" aria-label="Resumen">
+      <article class="card">
+        <span class="card-label">Jugadores registrados</span>
+        <strong class="card-value">{{ stats.players_count }}</strong>
+      </article>
+      <article class="card">
+        <span class="card-label">Mejor jugador · ELO actual</span>
+        {% if stats.best_player %}
+          <strong class="card-value card-value-small">{{ stats.best_player.name }}</strong>
+          <span class="card-detail">{{ stats.best_player.rating }} ELO</span>
+        {% else %}
+          <strong class="card-value card-value-small muted">Sin datos</strong>
+        {% endif %}
+      </article>
+      <article class="card">
+        <span class="card-label">Partidas analizadas</span>
+        <strong class="card-value">{{ stats.total_games }}</strong>
+      </article>
+    </section>
+
+    <section class="charts" aria-label="Estadísticas por civilización">
+      <article class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Popularidad</h2>
+            <p>Porcentaje de selecciones por civilización</p>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="pick-chart" aria-label="Gráfico de popularidad"></canvas></div>
+        <p class="empty-state" id="pick-empty" hidden>No hay partidas sincronizadas todavía.</p>
+      </article>
+      <article class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Winrate</h2>
+            <p>Porcentaje de victorias · mínimo {{ stats.min_civ_games }} partidas por civilización</p>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="winrate-chart" aria-label="Gráfico de winrate"></canvas></div>
+        <p class="empty-state" id="winrate-empty" hidden>No hay suficientes partidas por civilización para calcular winrates.</p>
+      </article>
+    </section>
+    <footer>Los porcentajes se calculan con las partidas presentes en la base de datos.</footer>
+  </main>
+  {{ stats|json_script:"stats-data" }}
+</body>
+</html>
