@@ -32,7 +32,11 @@ h1 { margin-bottom: 8px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -.04
 .message-error { border-color: #8b454c; color: #ff9ba8; }
 .message-info { color: #b9c8d8; }
 .sync-timestamp { margin: -14px 0 18px; color: #9aa8b8; font-size: 12px; }
-.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 18px; }
+.freshness { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: -2px 0 18px; }
+.freshness article { display: flex; flex-direction: column; gap: 5px; border-left: 2px solid #34475a; padding: 3px 12px; }
+.freshness strong { color: #c3cfdb; font-size: 12px; }
+.freshness span { color: #9aa8b8; font-size: 11px; }
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 18px; }
 .card, .panel { border: 1px solid #293747; border-radius: 16px; background: rgba(24, 34, 46, .92); box-shadow: 0 14px 35px rgba(0, 0, 0, .14); }
 .card { min-height: 136px; padding: 22px; display: flex; flex-direction: column; gap: 10px; }
 .card-label { color: #9aa8b8; font-size: 13px; }
@@ -62,7 +66,11 @@ footer { padding: 22px 2px 0; font-size: 12px; }
   .page { padding-top: 32px; }
   .header { align-items: flex-start; flex-direction: column; }
   .header-actions { width: 100%; justify-content: space-between; flex-wrap: wrap; }
-  .cards { grid-template-columns: 1fr; }
+  .cards, .freshness { grid-template-columns: 1fr; }
   .card { min-height: 110px; }
   .charts { grid-template-columns: 1fr; }
+}
+
+@media (min-width: 761px) and (max-width: 980px) {
+  .cards { grid-template-columns: repeat(2, 1fr); }
 }

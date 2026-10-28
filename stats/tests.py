@@ -23,7 +23,12 @@ class DashboardStatisticsTests(TestCase):
     def setUp(self):
         Player.objects.create(profile_id=1, name="Alpha", rating=1500)
         Player.objects.create(profile_id=2, name="Beta", rating=1400)
-        match = Match.objects.create(match_id=100, duration=600)
+        match = Match.objects.create(
+            match_id=100,
+            started_at=timezone.now(),
+            duration=600,
+            synced_at=timezone.now(),
+        )
         MatchParticipant.objects.create(
             match=match,
             player_id=1,
@@ -41,19 +46,47 @@ class DashboardStatisticsTests(TestCase):
         stats = build_statistics()
 
         self.assertEqual(stats["players_count"], 2)
-        self.assertEqual(stats["best_player"]["name"], "Alpha")
-        self.assertEqual(stats["best_player"]["rating"], 1500)
+        self.assertEqual(stats["configured_profiles_count"], 0)
+        self.assertEqual(stats["synced_profiles_count"], 0)
+        self.assertIsNone(stats["best_player"])
 
     def test_pick_rate_uses_all_participant_picks(self):
         stats = build_statistics()
 
         self.assertEqual(stats["total_games"], 1)
         self.assertEqual({item["pick_rate"] for item in stats["civilizations"]}, {50.0})
+        self.assertEqual(
+            {item["name"] for item in stats["civilizations"]},
+            {"English", "French"},
+        )
 
-    def test_winrate_omits_civilizations_below_minimum_sample(self):
+    @override_settings(AOE4_PROFILE_IDS=(1, 3))
+    def test_counts_configured_and_synced_profiles_separately(self):
+        Player.objects.filter(profile_id=1).update(
+            profile_synced_at=timezone.now(),
+        )
+
         stats = build_statistics()
 
-        self.assertEqual(stats["winrates"], [])
+        self.assertEqual(stats["configured_profiles_count"], 2)
+        self.assertEqual(stats["synced_profiles_count"], 1)
+        self.assertIsNotNone(stats["profiles_last_synced_at"])
+
+    def test_reports_imported_match_period_and_last_sync(self):
+        stats = build_statistics()
+
+        self.assertEqual(stats["matches_period_start"], Match.objects.get().started_at)
+        self.assertEqual(stats["matches_period_end"], Match.objects.get().started_at)
+        self.assertIsNotNone(stats["matches_last_synced_at"])
+
+    @override_settings(MIN_CIV_GAMES=1)
+    def test_winrate_uses_readable_civilization_names(self):
+        stats = build_statistics()
+
+        self.assertEqual(
+            {item["name"] for item in stats["winrates"]},
+            {"English", "French"},
+        )
 
     def test_current_leaderboard_is_used_for_best_player(self):
         LeaderboardEntry.objects.create(
@@ -148,6 +181,13 @@ class AoE4SyncTests(TestCase):
         player = Player.objects.get(profile_id=42)
         self.assertEqual(player.rating, 1234)
         self.assertEqual(player.games_count, 56)
+        self.assertIsNotNone(player.profile_synced_at)
+
+    def test_profile_id_parser_deduplicates_and_rejects_invalid_values(self):
+        self.assertEqual(Command.parse_profile_ids("21, 22,21"), (21, 22))
+
+        with self.assertRaisesMessage(CommandError, "ID de perfil inválido"):
+            Command.parse_profile_ids("AOE4_PROFILE_IDS=21")
 
     def test_save_game_is_idempotent_and_stores_participants(self):
         command = Command()

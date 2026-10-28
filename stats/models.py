@@ -6,6 +6,7 @@ class Player(models.Model):
     name = models.CharField(max_length=150)
     rating = models.PositiveIntegerField(null=True, blank=True)
     games_count = models.PositiveIntegerField(default=0)
+    profile_synced_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -21,6 +22,7 @@ class Match(models.Model):
     duration = models.PositiveIntegerField(default=0, help_text="Duración en segundos")
     kind = models.CharField(max_length=40, blank=True)
     leaderboard = models.CharField(max_length=40, blank=True)
+    synced_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"Partida {self.match_id}"

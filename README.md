@@ -126,11 +126,13 @@ También puedes actualizar los datos desde el botón **Actualizar datos** del pa
 
 ### Métricas
 
+- Los contadores distinguen los perfiles objetivo configurados, los jugadores únicos presentes en partidas importadas y los jugadores del leaderboard.
 - El rating del jugador destacado usa el modo configurado por `AOE4_RATING_MODE` (por defecto `rm_solo`).
 - El top de la clasificación viene del leaderboard actual de AoE4 World y se actualiza al ejecutar el sincronizador. Es una clasificación de temporada, no una lista de jugadores conectados en vivo.
-- La marca «En vivo» indica que AoE4 World reportó el canal de Twitch del jugador como activo durante la última sincronización.
-- El pick rate se calcula con las participaciones de civilizaciones almacenadas.
-- El winrate se muestra cuando una civilización alcanza `MIN_CIV_GAMES` partidas (por defecto, 5).
+- La etiqueta «Twitch en vivo» indica que AoE4 World reportó el canal de Twitch del jugador como activo; no significa que esté jugando.
+- El pick rate se calcula sobre las selecciones de civilización en las partidas importadas. El winrate usa esas mismas partidas y solo se muestra al alcanzar `MIN_CIV_GAMES` por civilización (por defecto, 5).
+- Los gráficos informan el rango entre la partida importada más antigua y la más reciente. Solo representan los datos sincronizados, no toda la actividad del juego.
+- El panel indica cuándo se actualizaron perfiles, partidas y leaderboard.
 - El endpoint JSON está disponible en `/api/stats/`.
 
 La base de datos refleja solo los perfiles y las partidas que se hayan sincronizado. AoE4 World es un servicio externo: respeta sus términos y límites de uso.
@@ -149,6 +151,7 @@ Age-Empires/
 ├── stats/
 │   ├── management/commands/    # Comando fetch_aoe_data
 │   ├── migrations/             # Migraciones de la base de datos
+│   ├── profile_ids.py          # Validación de perfiles configurados
 │   ├── static/stats/           # JavaScript y estilos del panel
 │   ├── templates/stats/        # Plantilla HTML del panel
 │   ├── models.py               # Jugadores, partidas y participantes

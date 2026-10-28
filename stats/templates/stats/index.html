@@ -39,18 +39,23 @@
 
     {% if data_sync.finished_at %}
       <p class="sync-timestamp">
-        Última actualización: {{ data_sync.finished_at|date:"d/m/Y H:i" }}
+        Último intento de sincronización desde el panel: {{ data_sync.finished_at|date:"d/m/Y H:i" }}
         {% if data_sync.status == "failed" %}· {{ data_sync.error }}{% endif %}
       </p>
     {% endif %}
 
     <section class="cards" aria-label="Resumen">
       <article class="card">
-        <span class="card-label">Jugadores en partidas sincronizadas</span>
+        <span class="card-label">Perfiles configurados</span>
+        <strong class="card-value">{{ stats.configured_profiles_count }}</strong>
+        <span class="card-detail">{{ stats.synced_profiles_count }} sincronizados</span>
+      </article>
+      <article class="card">
+        <span class="card-label">Jugadores únicos en partidas importadas</span>
         <strong class="card-value">{{ stats.players_count }}</strong>
       </article>
       <article class="card">
-        <span class="card-label">Líder actual · {{ stats.leaderboard_key }}</span>
+        <span class="card-label">Líder del ranking · {{ stats.leaderboard_key }}</span>
         {% if stats.best_player %}
           <strong class="card-value card-value-small">{{ stats.best_player.name }}</strong>
           <span class="card-detail">{% if stats.best_player.rank %}#{{ stats.best_player.rank }} · {% endif %}{{ stats.best_player.rating }} ELO</span>
@@ -59,8 +64,43 @@
         {% endif %}
       </article>
       <article class="card">
-        <span class="card-label">Partidas analizadas</span>
+        <span class="card-label">Partidas importadas</span>
         <strong class="card-value">{{ stats.total_games }}</strong>
+      </article>
+    </section>
+
+    <section class="freshness" aria-label="Alcance y actualización de los datos">
+      <article>
+        <strong>Perfiles</strong>
+        <span>
+          {% if stats.profiles_last_synced_at %}
+            {{ stats.synced_profiles_count }} de {{ stats.configured_profiles_count }} sincronizados · {{ stats.profiles_last_synced_at|date:"d/m/Y H:i" }}
+          {% elif stats.configured_profiles_count %}
+            {{ stats.configured_profiles_count }} configurados · aún no sincronizados
+          {% else %}
+            No hay perfiles configurados
+          {% endif %}
+        </span>
+      </article>
+      <article>
+        <strong>Partidas</strong>
+        <span>
+          {% if stats.matches_last_synced_at %}
+            Importadas por última vez {{ stats.matches_last_synced_at|date:"d/m/Y H:i" }}
+          {% else %}
+            Sin partidas importadas
+          {% endif %}
+        </span>
+      </article>
+      <article>
+        <strong>Clasificación · {{ stats.leaderboard_key }}{% if stats.leaderboard_season %}, temporada {{ stats.leaderboard_season }}{% endif %}</strong>
+        <span>
+          {% if stats.leaderboard_last_synced_at %}
+            Actualizada {{ stats.leaderboard_last_synced_at|date:"d/m/Y H:i" }}
+          {% else %}
+            Sin clasificación sincronizada
+          {% endif %}
+        </span>
       </article>
     </section>
 
@@ -74,7 +114,7 @@
           </p>
         </div>
         {% if stats.leaderboard_players %}
-          <span class="badge">Actualizado {{ stats.leaderboard_players.0.synced_at|date:"d/m/Y H:i" }}</span>
+          <span class="badge">Actualizado {{ stats.leaderboard_last_synced_at|date:"d/m/Y H:i" }}</span>
         {% endif %}
       </div>
       {% if stats.leaderboard_players %}
@@ -100,7 +140,7 @@
                     <a href="https://aoe4world.com/players/{{ player.profile_id }}" target="_blank" rel="noopener noreferrer">
                       {{ player.name }}
                     </a>
-                    {% if player.twitch_is_live %}<span class="live-badge">En vivo</span>{% endif %}
+                    {% if player.twitch_is_live %}<span class="live-badge" title="AoE4 World informa que su canal de Twitch está en directo">Twitch en vivo</span>{% endif %}
                   </td>
                   <td>{{ player.rating|default:"—" }}</td>
                   <td>{{ player.win_rate_display }}</td>
@@ -123,7 +163,11 @@
         <div class="panel-heading">
           <div>
             <h2>Popularidad</h2>
-            <p>Porcentaje de selecciones por civilización</p>
+            <p>Selecciones de civilización en partidas importadas
+              {% if stats.matches_period_start and stats.matches_period_end %}
+                · {{ stats.matches_period_start|date:"d/m/Y" }} a {{ stats.matches_period_end|date:"d/m/Y" }}
+              {% endif %}
+            </p>
           </div>
         </div>
         <div class="chart-wrap"><canvas id="pick-chart" aria-label="Gráfico de popularidad"></canvas></div>
@@ -133,14 +177,24 @@
         <div class="panel-heading">
           <div>
             <h2>Winrate</h2>
-            <p>Porcentaje de victorias · mínimo {{ stats.min_civ_games }} partidas por civilización</p>
+            <p>Victorias en partidas importadas · mínimo {{ stats.min_civ_games }} partidas
+              {% if stats.winrates_period_start and stats.winrates_period_end %}
+                · {{ stats.winrates_period_start|date:"d/m/Y" }} a {{ stats.winrates_period_end|date:"d/m/Y" }}
+              {% endif %}
+            </p>
           </div>
         </div>
         <div class="chart-wrap"><canvas id="winrate-chart" aria-label="Gráfico de winrate"></canvas></div>
         <p class="empty-state" id="winrate-empty" hidden>No hay suficientes partidas por civilización para calcular winrates.</p>
       </article>
     </section>
-    <footer>Los porcentajes se calculan con las partidas presentes en la base de datos.</footer>
+    <footer>
+      Las métricas de civilizaciones usan solo partidas importadas desde AoE4 World
+      {% if stats.matches_period_start and stats.matches_period_end %}
+        entre {{ stats.matches_period_start|date:"d/m/Y" }} y {{ stats.matches_period_end|date:"d/m/Y" }}
+      {% endif %}
+      y pueden no representar toda la actividad del juego. «Twitch en vivo» es el estado del canal de Twitch, no si el jugador está jugando ahora.
+    </footer>
   </main>
   {{ stats|json_script:"stats-data" }}
 </body>

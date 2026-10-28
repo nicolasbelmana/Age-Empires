@@ -5,7 +5,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Min, Q
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
@@ -18,6 +18,23 @@ from .models import DataSyncStatus, LeaderboardEntry, Match, MatchParticipant, P
 SYNC_STATUS_ID = 1
 SYNC_COOLDOWN = timedelta(minutes=1)
 SYNC_STALE_AFTER = timedelta(minutes=10)
+
+CIVILIZATION_NAMES = {
+    "abbasid_dynasty": "Abbasid Dynasty",
+    "ayyubids": "Ayyubids",
+    "byzantines": "Byzantines",
+    "delhi_sultanate": "Delhi Sultanate",
+    "holy_roman_empire": "Holy Roman Empire",
+    "order_of_the_dragon": "Order of the Dragon",
+    "zhuxi_legacy": "Zhu Xi's Legacy",
+}
+
+
+def civilization_display_name(civilization):
+    return CIVILIZATION_NAMES.get(
+        civilization,
+        civilization.replace("_", " ").title(),
+    )
 
 
 def build_statistics():
@@ -58,19 +75,14 @@ def build_statistics():
         player["streak_display"] = (
             f"+{player['streak']}" if player["streak"] > 0 else str(player["streak"])
         )
-    best_player = (
-        {
+    best_player = None
+    if leaderboard_players:
+        best_player = {
             "profile_id": leaderboard_players[0]["profile_id"],
             "name": leaderboard_players[0]["name"],
             "rating": leaderboard_players[0]["rating"],
             "rank": leaderboard_players[0]["rank"],
         }
-        if leaderboard_players
-        else Player.objects.filter(rating__isnull=False)
-        .order_by("-rating", "name")
-        .values("profile_id", "name", "rating")
-        .first()
-    )
 
     civilizations = list(
         MatchParticipant.objects.exclude(civilization="")
@@ -84,9 +96,23 @@ def build_statistics():
 
     total_picks = sum(item["games"] for item in civilizations)
     min_games = settings.MIN_CIV_GAMES
+    configured_profile_ids = settings.AOE4_PROFILE_IDS
+    synced_profiles = Player.objects.filter(
+        profile_id__in=configured_profile_ids,
+        profile_synced_at__isnull=False,
+    )
+    match_dates = Match.objects.aggregate(
+        period_start=Min("started_at"),
+        period_end=Max("started_at"),
+        last_synced_at=Max("synced_at"),
+    )
+    leaderboard_last_synced_at = leaderboard_entries.aggregate(
+        last_synced_at=Max("synced_at")
+    )["last_synced_at"]
     winrates = [
         {
             "civilization": item["civilization"],
+            "name": civilization_display_name(item["civilization"]),
             "games": item["games"],
             "wins": item["wins"],
             "win_rate": round(item["wins"] * 100 / item["games"], 1),
@@ -96,15 +122,25 @@ def build_statistics():
     ]
 
     return {
-        "players_count": Player.objects.count(),
+        "players_count": MatchParticipant.objects.values("player_id").distinct().count(),
+        "configured_profiles_count": len(configured_profile_ids),
+        "synced_profiles_count": synced_profiles.count(),
+        "profiles_last_synced_at": synced_profiles.aggregate(
+            last_synced_at=Max("profile_synced_at")
+        )["last_synced_at"],
         "best_player": best_player,
         "total_games": Match.objects.count(),
+        "matches_period_start": match_dates["period_start"],
+        "matches_period_end": match_dates["period_end"],
+        "matches_last_synced_at": match_dates["last_synced_at"],
         "leaderboard_key": settings.AOE4_LEADERBOARD,
         "leaderboard_season": current_season,
+        "leaderboard_last_synced_at": leaderboard_last_synced_at,
         "leaderboard_players": leaderboard_players,
         "civilizations": [
             {
                 "civilization": item["civilization"],
+                "name": civilization_display_name(item["civilization"]),
                 "games": item["games"],
                 "pick_rate": round(item["games"] * 100 / total_picks, 1)
                 if total_picks
@@ -113,6 +149,8 @@ def build_statistics():
             for item in civilizations
         ],
         "winrates": winrates,
+        "winrates_period_start": match_dates["period_start"],
+        "winrates_period_end": match_dates["period_end"],
         "min_civ_games": min_games,
     }
 

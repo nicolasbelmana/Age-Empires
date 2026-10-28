@@ -1,4 +1,3 @@
-import os
 import time
 from datetime import datetime, timezone as datetime_timezone
 
@@ -9,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from stats.models import LeaderboardEntry, Match, MatchParticipant, Player
+from stats.profile_ids import parse_profile_ids
 
 
 class AoE4WorldClient:
@@ -42,7 +42,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "--profile-ids",
-            default=os.getenv("AOE4_PROFILE_IDS", ""),
+            default=",".join(str(profile_id) for profile_id in settings.AOE4_PROFILE_IDS),
             help="IDs separados por coma; por defecto usa AOE4_PROFILE_IDS.",
         )
         parser.add_argument(
@@ -199,20 +199,10 @@ class Command(BaseCommand):
 
     @staticmethod
     def parse_profile_ids(raw_ids):
-        ids = []
-        for value in raw_ids.split(","):
-            value = value.strip()
-            if not value:
-                continue
-            try:
-                profile_id = int(value)
-            except ValueError as exc:
-                raise CommandError(f"ID de perfil inválido: {value!r}.") from exc
-            if profile_id <= 0:
-                raise CommandError(f"ID de perfil inválido: {value!r}.")
-            if profile_id not in ids:
-                ids.append(profile_id)
-        return ids
+        try:
+            return parse_profile_ids(raw_ids)
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
 
     @staticmethod
     def save_profile(data, requested_profile_id):
@@ -243,6 +233,7 @@ class Command(BaseCommand):
                     "games_count": games_count
                     if isinstance(games_count, int) and games_count >= 0
                     else 0,
+                    "profile_synced_at": timezone.now(),
                 },
             )
 
@@ -335,6 +326,7 @@ class Command(BaseCommand):
                     "duration": max(0, duration),
                     "kind": str(game.get("kind") or "")[:40],
                     "leaderboard": str(game.get("leaderboard") or "")[:40],
+                    "synced_at": timezone.now(),
                 },
             )
             for participant in participants:

@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
     new Chart(pickCanvas, {
       type: "doughnut",
       data: {
-        labels: stats.civilizations.map((item) => item.civilization),
+        labels: stats.civilizations.map((item) => item.name),
         datasets: [{
           data: stats.civilizations.map((item) => item.pick_rate),
           backgroundColor: stats.civilizations.map((_, index) => colors[index % colors.length]),
@@ -42,7 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
     new Chart(winrateCanvas, {
       type: "bar",
       data: {
-        labels: stats.winrates.map((item) => item.civilization),
+        labels: stats.winrates.map((item) => item.name),
         datasets: [{
           label: "Winrate (%)",
           data: stats.winrates.map((item) => item.win_rate),
