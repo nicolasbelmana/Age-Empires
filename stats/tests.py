@@ -1,3 +1,4 @@
+from datetime import timedelta
 from io import StringIO
 from unittest.mock import patch
 
@@ -27,6 +28,7 @@ class DashboardStatisticsTests(TestCase):
             match_id=100,
             started_at=timezone.now(),
             duration=600,
+            leaderboard="rm_solo",
             synced_at=timezone.now(),
         )
         MatchParticipant.objects.create(
@@ -78,6 +80,97 @@ class DashboardStatisticsTests(TestCase):
         self.assertEqual(stats["matches_period_start"], Match.objects.get().started_at)
         self.assertEqual(stats["matches_period_end"], Match.objects.get().started_at)
         self.assertIsNotNone(stats["matches_last_synced_at"])
+
+    def test_match_filters_apply_to_dashboard_and_json_api(self):
+        latest_match = Match.objects.get(match_id=100)
+        older_match_time = latest_match.started_at - timedelta(days=2)
+        Match.objects.create(
+            match_id=101,
+            started_at=older_match_time,
+            duration=600,
+            leaderboard="qm_2v2",
+            synced_at=timezone.now(),
+        )
+        Player.objects.create(profile_id=3, name="Gamma")
+        other_match = Match.objects.get(match_id=101)
+        MatchParticipant.objects.create(
+            match=other_match,
+            player_id=3,
+            civilization="rus",
+            result=MatchParticipant.Result.WIN,
+        )
+        query = (
+            "?game_mode=rm_solo&civilization=english"
+            f"&date_from={latest_match.started_at.date().isoformat()}"
+        )
+
+        dashboard = self.client.get(f"/{query}")
+        api_response = self.client.get(f"/api/stats/{query}")
+
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertContains(dashboard, 'value="rm_solo" selected')
+        stats = api_response.json()
+        self.assertEqual(stats["total_games"], 1)
+        self.assertEqual(stats["players_count"], 1)
+        self.assertEqual(
+            [item["civilization"] for item in stats["civilizations"]],
+            ["english"],
+        )
+
+    def test_civilization_filter_counts_only_games_that_used_it(self):
+        Match.objects.create(
+            match_id=102,
+            started_at=timezone.now() - timedelta(days=1),
+            duration=600,
+            leaderboard="qm_2v2",
+        )
+
+        stats = self.client.get("/api/stats/?civilization=english").json()
+
+        self.assertEqual(stats["total_games"], 1)
+        self.assertEqual(stats["players_count"], 1)
+        self.assertEqual(
+            [item["civilization"] for item in stats["civilizations"]],
+            ["english"],
+        )
+
+    def test_leaderboard_mode_and_season_filters_select_archived_season(self):
+        LeaderboardEntry.objects.create(
+            leaderboard="rm_solo",
+            season=13,
+            rank=1,
+            profile_id=3,
+            name="Season 13 leader",
+            rating=2200,
+        )
+        LeaderboardEntry.objects.create(
+            leaderboard="rm_solo",
+            season=14,
+            rank=1,
+            profile_id=4,
+            name="Season 14 leader",
+            rating=2400,
+        )
+
+        stats = self.client.get(
+            "/api/stats/?leaderboard=rm_solo&season=13"
+        ).json()
+
+        self.assertEqual(stats["leaderboard_season"], 13)
+        self.assertEqual(stats["best_player"]["name"], "Season 13 leader")
+        self.assertEqual(
+            [player["name"] for player in stats["leaderboard_players"]],
+            ["Season 13 leader"],
+        )
+
+    def test_invalid_filter_values_are_reported_without_breaking_dashboard(self):
+        response = self.client.get(
+            "/?game_mode=not-a-mode&civilization=not-a-civ&date_from=invalid"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Usa fechas válidas")
+        self.assertContains(response, "modo de partidas seleccionado no está disponible")
 
     @override_settings(MIN_CIV_GAMES=1)
     def test_winrate_uses_readable_civilization_names(self):

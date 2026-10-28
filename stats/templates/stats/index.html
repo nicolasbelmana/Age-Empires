@@ -44,6 +44,75 @@
       </p>
     {% endif %}
 
+    <section class="panel filters-panel" aria-labelledby="filters-heading">
+      <div class="panel-heading">
+        <div>
+          <h2 id="filters-heading">Filtros</h2>
+          <p>Ranking y estadísticas de partidas se pueden filtrar por separado.</p>
+        </div>
+      </div>
+      {% if stats.filter_errors %}
+        <div class="filter-errors" role="alert">
+          {% for error in stats.filter_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+      {% endif %}
+      <form method="get" action="{% url 'dashboard' %}" class="filters-form">
+        <fieldset>
+          <legend>Clasificación</legend>
+          <label>
+            Modo del ranking
+            <select name="leaderboard">
+              {% for mode in stats.leaderboard_options %}
+                <option value="{{ mode }}" {% if stats.filters.leaderboard == mode %}selected{% endif %}>{{ mode }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Temporada
+            <select name="season">
+              <option value="">Última disponible</option>
+              {% for season in stats.season_options %}
+                <option value="{{ season }}" {% if stats.filters.season == season|stringformat:"s" %}selected{% endif %}>Temporada {{ season }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>Partidas y civilizaciones</legend>
+          <label>
+            Modo de partida
+            <select name="game_mode">
+              <option value="all" {% if stats.filters.game_mode == "all" %}selected{% endif %}>Todos los modos</option>
+              {% for mode in stats.game_mode_options %}
+                <option value="{{ mode }}" {% if stats.filters.game_mode == mode %}selected{% endif %}>{{ mode }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Civilización
+            <select name="civilization">
+              <option value="">Todas las civilizaciones</option>
+              {% for civilization in stats.civilization_options %}
+                <option value="{{ civilization.key }}" {% if stats.filters.civilization == civilization.key %}selected{% endif %}>{{ civilization.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Desde
+            <input type="date" name="date_from" value="{{ stats.filters.date_from }}">
+          </label>
+          <label>
+            Hasta
+            <input type="date" name="date_to" value="{{ stats.filters.date_to }}">
+          </label>
+        </fieldset>
+        <div class="filter-actions">
+          <button class="sync-button filter-button" type="submit">Aplicar filtros</button>
+          <a class="reset-link" href="{% url 'dashboard' %}">Limpiar filtros</a>
+        </div>
+      </form>
+    </section>
+
     <section class="cards" aria-label="Resumen">
       <article class="card">
         <span class="card-label">Perfiles configurados</span>
@@ -51,7 +120,7 @@
         <span class="card-detail">{{ stats.synced_profiles_count }} sincronizados</span>
       </article>
       <article class="card">
-        <span class="card-label">Jugadores únicos en partidas importadas</span>
+        <span class="card-label">Jugadores únicos en partidas filtradas</span>
         <strong class="card-value">{{ stats.players_count }}</strong>
       </article>
       <article class="card">
@@ -64,7 +133,7 @@
         {% endif %}
       </article>
       <article class="card">
-        <span class="card-label">Partidas importadas</span>
+        <span class="card-label">Partidas filtradas</span>
         <strong class="card-value">{{ stats.total_games }}</strong>
       </article>
     </section>
@@ -118,36 +187,36 @@
         {% endif %}
       </div>
       {% if stats.leaderboard_players %}
-        <div class="table-scroll">
-          <table>
+        <div class="table-scroll" tabindex="0" aria-label="Tabla de clasificación desplazable">
+          <table id="leaderboard-table">
             <thead>
               <tr>
-                <th scope="col">Puesto</th>
-                <th scope="col">Jugador</th>
-                <th scope="col">Rating</th>
-                <th scope="col">Winrate</th>
-                <th scope="col">Partidas</th>
-                <th scope="col">Victorias / derrotas</th>
-                <th scope="col">Racha</th>
-                <th scope="col">Última partida</th>
+                <th scope="col" aria-sort="none"><button class="sort-button" type="button" data-sort-type="number">Puesto</button></th>
+                <th scope="col" aria-sort="none"><button class="sort-button" type="button" data-sort-type="text">Jugador</button></th>
+                <th scope="col" aria-sort="none"><button class="sort-button" type="button" data-sort-type="number">Rating</button></th>
+                <th scope="col" aria-sort="none"><button class="sort-button" type="button" data-sort-type="number">Winrate</button></th>
+                <th scope="col" aria-sort="none"><button class="sort-button" type="button" data-sort-type="number">Partidas</button></th>
+                <th scope="col" aria-sort="none"><button class="sort-button" type="button" data-sort-type="text">Victorias / derrotas</button></th>
+                <th scope="col" aria-sort="none"><button class="sort-button" type="button" data-sort-type="number">Racha</button></th>
+                <th scope="col" aria-sort="none"><button class="sort-button" type="button" data-sort-type="number">Última partida</button></th>
               </tr>
             </thead>
             <tbody>
               {% for player in stats.leaderboard_players %}
                 <tr>
-                  <td class="rank-cell">#{{ player.rank }}</td>
-                  <td>
+                  <td class="rank-cell" data-sort-value="{{ player.rank }}">#{{ player.rank }}</td>
+                  <td data-sort-value="{{ player.name|lower }}">
                     <a href="https://aoe4world.com/players/{{ player.profile_id }}" target="_blank" rel="noopener noreferrer">
                       {{ player.name }}
                     </a>
                     {% if player.twitch_is_live %}<span class="live-badge" title="AoE4 World informa que su canal de Twitch está en directo">Twitch en vivo</span>{% endif %}
                   </td>
-                  <td>{{ player.rating|default:"—" }}</td>
-                  <td>{{ player.win_rate_display }}</td>
-                  <td>{{ player.games_count }}</td>
-                  <td>{{ player.wins_count }} / {{ player.losses_count }}</td>
-                  <td>{{ player.streak_display }}</td>
-                  <td>{{ player.last_game_at|date:"d/m/Y H:i"|default:"—" }}</td>
+                  <td data-sort-value="{{ player.rating|default_if_none:0 }}">{{ player.rating|default:"—" }}</td>
+                  <td data-sort-value="{{ player.win_rate|default_if_none:'' }}">{{ player.win_rate_display }}</td>
+                  <td data-sort-value="{{ player.games_count }}">{{ player.games_count }}</td>
+                  <td data-sort-value="{{ player.wins_count|stringformat:'06d' }}-{{ player.losses_count|stringformat:'06d' }}">{{ player.wins_count }} / {{ player.losses_count }}</td>
+                  <td data-sort-value="{{ player.streak }}">{{ player.streak_display }}</td>
+                  <td data-sort-value="{{ player.last_game_at|date:'U'|default:'0' }}">{{ player.last_game_at|date:"d/m/Y H:i"|default:"—" }}</td>
                 </tr>
               {% endfor %}
             </tbody>

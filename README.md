@@ -132,6 +132,7 @@ También puedes actualizar los datos desde el botón **Actualizar datos** del pa
 - La etiqueta «Twitch en vivo» indica que AoE4 World reportó el canal de Twitch del jugador como activo; no significa que esté jugando.
 - El pick rate se calcula sobre las selecciones de civilización en las partidas importadas. El winrate usa esas mismas partidas y solo se muestra al alcanzar `MIN_CIV_GAMES` por civilización (por defecto, 5).
 - Los gráficos informan el rango entre la partida importada más antigua y la más reciente. Solo representan los datos sincronizados, no toda la actividad del juego.
+- El panel permite filtrar el ranking por modo y temporada, y las partidas por modo, civilización y rango de fechas. Las columnas del ranking se pueden ordenar desde sus encabezados.
 - El panel indica cuándo se actualizaron perfiles, partidas y leaderboard.
 - El endpoint JSON está disponible en `/api/stats/`.
 

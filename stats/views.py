@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from io import StringIO
 
 from django.conf import settings
@@ -37,19 +37,121 @@ def civilization_display_name(civilization):
     )
 
 
-def build_statistics():
-    current_season = (
-        LeaderboardEntry.objects.filter(leaderboard=settings.AOE4_LEADERBOARD)
-        .order_by("-season")
-        .values_list("season", flat=True)
-        .first()
+def get_dashboard_filters(params):
+    leaderboard_options = sorted(
+        set(
+            LeaderboardEntry.objects.exclude(leaderboard="")
+            .values_list("leaderboard", flat=True)
+            .distinct()
+        )
+        | {settings.AOE4_LEADERBOARD}
     )
-    leaderboard_entries = LeaderboardEntry.objects.none()
-    if current_season is not None:
-        leaderboard_entries = LeaderboardEntry.objects.filter(
-            leaderboard=settings.AOE4_LEADERBOARD,
-            season=current_season,
-        ).order_by("rank")
+    game_mode_options = sorted(
+        set(
+            Match.objects.exclude(leaderboard="")
+            .values_list("leaderboard", flat=True)
+            .distinct()
+        )
+    )
+    civilization_options = [
+        {
+            "key": civilization,
+            "name": civilization_display_name(civilization),
+        }
+        for civilization in MatchParticipant.objects.exclude(civilization="")
+        .values_list("civilization", flat=True)
+        .distinct()
+        .order_by("civilization")
+    ]
+    errors = []
+
+    leaderboard = params.get("leaderboard", settings.AOE4_LEADERBOARD).strip()
+    if leaderboard not in leaderboard_options:
+        errors.append("El modo de clasificación seleccionado no está disponible.")
+        leaderboard = settings.AOE4_LEADERBOARD
+
+    season_options = list(
+        LeaderboardEntry.objects.filter(leaderboard=leaderboard)
+        .values_list("season", flat=True)
+        .distinct()
+        .order_by("-season")
+    )
+    selected_season = params.get("season", "").strip()
+    if selected_season:
+        try:
+            selected_season_number = int(selected_season)
+        except ValueError:
+            selected_season_number = None
+        if selected_season_number not in season_options:
+            errors.append("La temporada seleccionada no está disponible.")
+            selected_season = str(season_options[0]) if season_options else ""
+        else:
+            selected_season = str(selected_season_number)
+    elif season_options:
+        selected_season = str(season_options[0])
+
+    game_mode = params.get("game_mode", "all").strip()
+    if game_mode != "all" and game_mode not in game_mode_options:
+        errors.append("El modo de partidas seleccionado no está disponible.")
+        game_mode = "all"
+
+    civilization = params.get("civilization", "").strip()
+    available_civilizations = {item["key"] for item in civilization_options}
+    if civilization and civilization not in available_civilizations:
+        errors.append("La civilización seleccionada no está disponible.")
+        civilization = ""
+
+    date_from = params.get("date_from", "").strip()
+    date_to = params.get("date_to", "").strip()
+    parsed_date_from = None
+    parsed_date_to = None
+    try:
+        if date_from:
+            parsed_date_from = date.fromisoformat(date_from)
+        if date_to:
+            parsed_date_to = date.fromisoformat(date_to)
+    except ValueError:
+        errors.append("Usa fechas válidas para filtrar las partidas.")
+        date_from = ""
+        date_to = ""
+        parsed_date_from = None
+        parsed_date_to = None
+
+    if parsed_date_from and parsed_date_to and parsed_date_from > parsed_date_to:
+        errors.append("La fecha inicial no puede ser posterior a la fecha final.")
+        date_from = ""
+        date_to = ""
+        parsed_date_from = None
+        parsed_date_to = None
+
+    return {
+        "leaderboard": leaderboard,
+        "leaderboard_options": leaderboard_options,
+        "season": selected_season,
+        "season_options": season_options,
+        "game_mode": game_mode,
+        "game_mode_options": game_mode_options,
+        "civilization": civilization,
+        "civilization_options": civilization_options,
+        "date_from": date_from,
+        "date_to": date_to,
+        "parsed_date_from": parsed_date_from,
+        "parsed_date_to": parsed_date_to,
+        "filter_errors": errors,
+    }
+
+
+def build_statistics(filters=None):
+    filters = filters or get_dashboard_filters({})
+    selected_season = int(filters["season"]) if filters["season"] else None
+    leaderboard_entries = LeaderboardEntry.objects.filter(
+        leaderboard=filters["leaderboard"],
+    )
+    if selected_season is not None:
+        leaderboard_entries = leaderboard_entries.filter(season=selected_season)
+    else:
+        leaderboard_entries = LeaderboardEntry.objects.none()
+    leaderboard_entries = leaderboard_entries.order_by("rank")
 
     leaderboard_players = list(
         leaderboard_entries.values(
@@ -84,8 +186,24 @@ def build_statistics():
             "rank": leaderboard_players[0]["rank"],
         }
 
+    matches = Match.objects.all()
+    if filters["game_mode"] != "all":
+        matches = matches.filter(leaderboard=filters["game_mode"])
+    if filters["parsed_date_from"]:
+        matches = matches.filter(started_at__date__gte=filters["parsed_date_from"])
+    if filters["parsed_date_to"]:
+        matches = matches.filter(started_at__date__lte=filters["parsed_date_to"])
+
+    if filters["civilization"]:
+        matches = matches.filter(
+            participants__civilization=filters["civilization"],
+        ).distinct()
+    participants = MatchParticipant.objects.filter(match__in=matches)
+    if filters["civilization"]:
+        participants = participants.filter(civilization=filters["civilization"])
+
     civilizations = list(
-        MatchParticipant.objects.exclude(civilization="")
+        participants.exclude(civilization="")
         .values("civilization")
         .annotate(
             games=Count("id"),
@@ -101,7 +219,7 @@ def build_statistics():
         profile_id__in=configured_profile_ids,
         profile_synced_at__isnull=False,
     )
-    match_dates = Match.objects.aggregate(
+    match_dates = matches.aggregate(
         period_start=Min("started_at"),
         period_end=Max("started_at"),
         last_synced_at=Max("synced_at"),
@@ -122,19 +240,20 @@ def build_statistics():
     ]
 
     return {
-        "players_count": MatchParticipant.objects.values("player_id").distinct().count(),
+        "players_count": participants.values("player_id").distinct().count(),
+        "all_players_count": MatchParticipant.objects.values("player_id").distinct().count(),
         "configured_profiles_count": len(configured_profile_ids),
         "synced_profiles_count": synced_profiles.count(),
         "profiles_last_synced_at": synced_profiles.aggregate(
             last_synced_at=Max("profile_synced_at")
         )["last_synced_at"],
         "best_player": best_player,
-        "total_games": Match.objects.count(),
+        "total_games": matches.count(),
         "matches_period_start": match_dates["period_start"],
         "matches_period_end": match_dates["period_end"],
         "matches_last_synced_at": match_dates["last_synced_at"],
-        "leaderboard_key": settings.AOE4_LEADERBOARD,
-        "leaderboard_season": current_season,
+        "leaderboard_key": filters["leaderboard"],
+        "leaderboard_season": selected_season,
         "leaderboard_last_synced_at": leaderboard_last_synced_at,
         "leaderboard_players": leaderboard_players,
         "civilizations": [
@@ -152,6 +271,19 @@ def build_statistics():
         "winrates_period_start": match_dates["period_start"],
         "winrates_period_end": match_dates["period_end"],
         "min_civ_games": min_games,
+        "filters": {
+            "leaderboard": filters["leaderboard"],
+            "season": filters["season"],
+            "game_mode": filters["game_mode"],
+            "civilization": filters["civilization"],
+            "date_from": filters["date_from"],
+            "date_to": filters["date_to"],
+        },
+        "leaderboard_options": filters["leaderboard_options"],
+        "season_options": filters["season_options"],
+        "game_mode_options": filters["game_mode_options"],
+        "civilization_options": filters["civilization_options"],
+        "filter_errors": filters["filter_errors"],
     }
 
 
@@ -167,7 +299,7 @@ def dashboard(request):
         request,
         "stats/index.html",
         {
-            "stats": build_statistics(),
+            "stats": build_statistics(get_dashboard_filters(request.GET)),
             "data_sync": data_sync,
             "sync_running": sync_running,
         },
@@ -175,7 +307,7 @@ def dashboard(request):
 
 
 def stats_json(request):
-    return JsonResponse(build_statistics())
+    return JsonResponse(build_statistics(get_dashboard_filters(request.GET)))
 
 
 @require_POST

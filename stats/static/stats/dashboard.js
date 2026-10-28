@@ -6,6 +6,42 @@ document.addEventListener("DOMContentLoaded", () => {
     button.textContent = "Actualizando...";
   });
 
+  const leaderboardTable = document.getElementById("leaderboard-table");
+  if (leaderboardTable) {
+    const body = leaderboardTable.tBodies[0];
+    const headers = Array.from(leaderboardTable.tHead.rows[0].cells);
+    const textCollator = new Intl.Collator("es", {
+      numeric: true,
+      sensitivity: "base",
+    });
+
+    headers.forEach((header, columnIndex) => {
+      const button = header.querySelector(".sort-button");
+      button.addEventListener("click", () => {
+        const ascending = header.getAttribute("aria-sort") !== "ascending";
+        headers.forEach((item) => item.setAttribute("aria-sort", "none"));
+        header.setAttribute("aria-sort", ascending ? "ascending" : "descending");
+
+        const rows = Array.from(body.rows);
+        rows.sort((left, right) => {
+          const leftValue = left.cells[columnIndex].dataset.sortValue || "";
+          const rightValue = right.cells[columnIndex].dataset.sortValue || "";
+          if (!leftValue && rightValue) return 1;
+          if (leftValue && !rightValue) return -1;
+
+          let comparison;
+          if (button.dataset.sortType === "number") {
+            comparison = Number(leftValue) - Number(rightValue);
+          } else {
+            comparison = textCollator.compare(leftValue, rightValue);
+          }
+          return ascending ? comparison : -comparison;
+        });
+        body.append(...rows);
+      });
+    });
+  }
+
   const stats = JSON.parse(document.getElementById("stats-data").textContent);
   const colors = [
     "#e2a34a", "#62a7dc", "#d96c55", "#70b88a", "#ad86d6",
