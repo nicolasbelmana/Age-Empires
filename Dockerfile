@@ -8,9 +8,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements.txt backend/requirements.txt
+RUN pip install --no-cache-dir -r backend/requirements.txt
 
-COPY . .
+COPY backend/ backend/
+COPY frontend/ frontend/
+WORKDIR /app/backend
 EXPOSE 8000
 CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec gunicorn aoe4stats.wsgi:application --bind 0.0.0.0:8000 --workers 2"]

@@ -7,6 +7,7 @@ from stats.profile_ids import parse_profile_ids
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = BASE_DIR.parent
 
 DEBUG = os.getenv("DJANGO_DEBUG", "1").lower() in {"1", "true", "yes"}
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
@@ -46,7 +47,7 @@ ROOT_URLCONF = "aoe4stats.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [PROJECT_ROOT / "frontend" / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -76,7 +77,7 @@ else:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
+            "NAME": PROJECT_ROOT / "db.sqlite3",
         }
     }
 
@@ -93,7 +94,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
+STATIC_ROOT = PROJECT_ROOT / "staticfiles"
+STATICFILES_DIRS = [PROJECT_ROOT / "frontend" / "static"]
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {

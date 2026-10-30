@@ -77,9 +77,9 @@ Requisitos: Python 3.10 o superior.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver
+pip install -r backend/requirements.txt
+python backend/manage.py migrate
+python backend/manage.py runserver
 ```
 
 En Windows PowerShell, activa el entorno con `.venv\Scripts\Activate.ps1`. La configuración local usa SQLite por defecto; configura las variables `DB_*` y `DB_ENGINE=mysql` si quieres usar MySQL.
@@ -141,28 +141,25 @@ La base de datos refleja solo los perfiles y las partidas que se hayan sincroniz
 ### Pruebas
 
 ```bash
-python manage.py test
+python backend/manage.py test stats
 ```
 
 ## 📁 Estructura del proyecto
 
 ```text
 Age-Empires/
-├── aoe4stats/                  # Configuración y puntos de entrada de Django
-├── stats/
-│   ├── management/commands/    # Comando fetch_aoe_data
-│   ├── migrations/             # Migraciones de la base de datos
-│   ├── profile_ids.py          # Validación de perfiles configurados
+├── backend/
+│   ├── aoe4stats/              # Configuración y puntos de entrada de Django
+│   ├── stats/                  # Modelos, vistas, API y migraciones
+│   ├── manage.py               # Comandos de Django
+│   └── requirements.txt        # Dependencias de Python
+├── frontend/
 │   ├── static/stats/           # JavaScript y estilos del panel
-│   ├── templates/stats/        # Plantilla HTML del panel
-│   ├── models.py               # Jugadores, partidas y participantes
-│   ├── tests.py                # Pruebas
-│   └── views.py                # Panel y API JSON
+│   └── templates/stats/        # Plantilla HTML del panel
 ├── .env.example                # Plantilla de configuración
 ├── docker-compose.yml          # Servicios web y MySQL
-├── Dockerfile
-├── manage.py
-└── requirements.txt
+├── Dockerfile                  # Imagen que reúne frontend y backend
+└── index.py                    # Punto de entrada compatible
 ```
 
 ## 🤝 Contribuir
